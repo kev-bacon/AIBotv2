@@ -2,3 +2,5 @@ langchain
 langchain-openai
 streamlit
 beautifulsoup4
+python-dotenv
+chromadb
