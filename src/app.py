@@ -41,7 +41,9 @@ def get_vectorstore_from_url(url):
     # create a vectorstore from the chunks
     vector_store = Chroma.from_documents(document_chunks, OpenAIEmbeddings())
     
-    print(f"{color_text('INSIDE get_vectorstore_from_url.\n', Colors.RED)} Document = {color_text(document, Colors.BLUE)}\n Document_chunks = {color_text(document_chunks, Colors.WHITE)} \n\n {color_text('-------------------------------------------------------------------------', Colors.RED)}")
+    print(f"{color_text('-------------\n get_vectorstore_from_url \n-------------\n', Colors.RED)} Document = \n {color_text(document, Colors.BLUE)}\n")
+    for i, chunk in enumerate(document_chunks): 
+        print(f"chunk[{i}] = {chunk}\n-------------------------------------------------------------------------\n")    
     return vector_store
 
 ## Looks at VectorDB and finds relevant information based on user question and chat history. Change prompting here, look into if it's user or human. 
@@ -54,7 +56,13 @@ def get_context_retriever_chain(vector_store):
         ("user", "Given the above conversation, generate a response to answer this question")    #CHANGE: System prompt can be changed here
     ])
     retriever_chain = create_history_aware_retriever(llm, retriever, prompt)        #REVISIT: Meant to find relevant documents and retrieve it Look into documentation on this 
-    print(f"{color_text('INSIDE get_context_retriever_chain.', Colors.RED)} PROMPT = {color_text(prompt, Colors.YELLOW)}\n\n Retriever_chain = {color_text(retriever_chain, Colors.CYAN)} \n\n {color_text('-------------------------------------------------------------------------', Colors.RED)}")
+
+    #DEBUGGING
+    header = '-------------\n get_context_retriever_chain -------------\n'
+    chat_history_placeholder = MessagesPlaceholder(variable_name='chat_history')
+    footer = '-------------------------------------------------------------------------'
+
+    print(f"{header} MessagesPlaceholder(variable_name=chat_history)= \n{chat_history_placeholder}\n\n input = {input} \n\n {footer}")
     return retriever_chain 
 
 def get_conversational_rag_chain(retriever_chain):
@@ -65,7 +73,7 @@ def get_conversational_rag_chain(retriever_chain):
         ("user", "{input}")
     ])
     stuff_documents_chain = create_stuff_documents_chain(llm, prompt)
-    print(f'INSIDE get_conversational_rag_chain. Prompt = {prompt}\n\n Stuff_documents_chain = {stuff_documents_chain} \n\n ---------------------------------------------')
+    print(f'-------------\n get_conversational_rag_chain -------------\n Prompt = {prompt}\n\n Stuff_documents_chain = {stuff_documents_chain} \n\n ---------------------------------------------')
     return create_retrieval_chain(retriever_chain, stuff_documents_chain)
 
 def get_response(query): 
@@ -75,7 +83,7 @@ def get_response(query):
             "chat_history": st.session_state.chat_history,
             "input" : query
         })
-    print(f"{color_text('INSIDE get_response', Colors.RED)}, response = {color_text(response, Colors.BLUE)} \n\n {color_text('---------------------------------------------', Colors.YELLOW)}")
+    print(f"{color_text('get_response', Colors.RED)}\n response = {color_text(response, Colors.BLUE)} \n\n {color_text('---------------------------------------------', Colors.YELLOW)}")
     return response['answer']
 
 
@@ -94,7 +102,10 @@ else:
             AIMessage(content="Hello, I am a bot. How can I help you?"),
         ]
     if "vector_store" not in st.session_state: 
+        print(f"VECTOR STORE NOT IN SESSION STATE!! \n\n\n session state = {st.session_state} \n\n\n ")
         st.session_state.vector_store = get_vectorstore_from_url(website_url)
+        print(f"VECTOR STORE should now be in session state \n\n\n session state = {st.session_state} \n\n\n ")
+
 
     #handles user inputs 
     query = st.chat_input("Type your question here...")
