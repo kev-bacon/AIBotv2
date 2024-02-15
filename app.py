@@ -12,7 +12,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.vectorstores import FAISS 
-# from langchain_community.document_loaders import PyPDFium2Loader
+from langchain_community.document_loaders import PyPDFium2Loader
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 load_dotenv() 
 # config settings 
@@ -35,11 +35,11 @@ def color_text(text, color):
     return f"{color}{text}{Colors.ENDC}"
 
 #handles tmp file storage and returns file path to it 
-def save_uploadedfile(uploadedfile):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-        tmp_file.write(uploadedfile.getvalue())
-        return tmp_file.name
-
+def save_uploadedfile(uploadedfile, directory):
+    temp_pdf_path = os.path.join(directory, uploadedfile.name)
+    with open(temp_pdf_path, 'wb') as f:
+        f.write(uploadedfile.getvalue())
+    return temp_pdf_path
 
 def get_vectorstore_from_url(url): 
     loader = WebBaseLoader(url)
@@ -48,18 +48,22 @@ def get_vectorstore_from_url(url):
     document_chunks = text_splitter.split_documents(document)
     embeddings = OpenAIEmbeddings()
     vector_store = Chroma.from_documents(document_chunks, embeddings)
-    print(f"{color_text('-------------\n get_vectorstore_from_url. \n-------------\n', Colors.RED)} Document = \n {color_text(document, Colors.BLUE)}\n")
+    print(f"{color_text('-------------\n URL VectorStore \n-------------\n', Colors.RED)} Document = \n {color_text(document, Colors.BLUE)}\n")
     for i, chunk in enumerate(document_chunks): 
         print(f"chunk[{i}] = {chunk}\n-------------------------------------------------------------------------\n")    
     return vector_store
 
 def get_vectorstore_from_pdf(pdf_docs): 
-    loader = PyPDFDirectoryLoader
+    # loader =PyPDFium2Loader(pdf_docs)
+    loader = PyPDFDirectoryLoader(pdf_docs)
     documents = loader.load()
     text_splitter = RecursiveCharacterTextSplitter() 
     document_chunks = text_splitter.split_documents(documents)
     embeddings = OpenAIEmbeddings()
     vector_store = Chroma.from_documents(document_chunks, embeddings)
+    print(f"{color_text('-------------\n PDF VectorStore. \n-------------\n', Colors.RED)} Document = \n {color_text(documents, Colors.BLUE)}\n")
+    for i, chunk in enumerate(document_chunks): 
+        print(f"chunk[{i}] = {chunk}\n-------------------------------------------------------------------------\n")  
     return vector_store
 
 
@@ -125,9 +129,14 @@ else:
         if not ((website_url is None or website_url == "")):
             st.session_state.vector_store = get_vectorstore_from_url(website_url)
         else: 
-            for uploaded_file in pdf_docs:
-                pdf_path = save_uploadedfile(uploaded_file) 
-            st.session_state.vector_store = get_vectorstore_from_pdf(pdf_path)
+            with tempfile.TemporaryDirectory() as temp_dir:
+                #create a temp file inside temp_dir for each pdf_doc
+                # file_path = ""
+                for uploaded_file in pdf_docs:
+                    save_uploadedfile(uploaded_file, temp_dir)
+                st.session_state.vector_store = get_vectorstore_from_pdf(temp_dir)
+                # st.session_state.vector_store = get_vectorstore_from_pdf(file_path)
+                    
             
 
 
