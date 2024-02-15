@@ -1,4 +1,7 @@
 import streamlit as st
+import pypdfium2 as pdfium
+import os
+import tempfile
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_community.document_loaders import WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter 
@@ -8,7 +11,9 @@ from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
-
+from langchain_community.vectorstores import FAISS 
+# from langchain_community.document_loaders import PyPDFium2Loader
+from langchain_community.document_loaders import PyPDFDirectoryLoader
 load_dotenv() 
 # config settings 
 st.set_page_config(page_title="Chat with me!")
@@ -29,22 +34,35 @@ class Colors:
 def color_text(text, color):
     return f"{color}{text}{Colors.ENDC}"
 
+#handles tmp file storage and returns file path to it 
+def save_uploadedfile(uploadedfile):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        tmp_file.write(uploadedfile.getvalue())
+        return tmp_file.name
+
 
 def get_vectorstore_from_url(url): 
-    # get the text in document form 
     loader = WebBaseLoader(url)
     document = loader.load()
-    # split into text chunks
     text_splitter = RecursiveCharacterTextSplitter() 
     document_chunks = text_splitter.split_documents(document)
-
-    # create a vectorstore from the chunks
-    vector_store = Chroma.from_documents(document_chunks, OpenAIEmbeddings())
-    
-    print(f"{color_text('-------------\n get_vectorstore_from_url \n-------------\n', Colors.RED)} Document = \n {color_text(document, Colors.BLUE)}\n")
+    embeddings = OpenAIEmbeddings()
+    vector_store = Chroma.from_documents(document_chunks, embeddings)
+    print(f"{color_text('-------------\n get_vectorstore_from_url. \n-------------\n', Colors.RED)} Document = \n {color_text(document, Colors.BLUE)}\n")
     for i, chunk in enumerate(document_chunks): 
         print(f"chunk[{i}] = {chunk}\n-------------------------------------------------------------------------\n")    
     return vector_store
+
+def get_vectorstore_from_pdf(pdf_docs): 
+    loader = PyPDFDirectoryLoader
+    documents = loader.load()
+    text_splitter = RecursiveCharacterTextSplitter() 
+    document_chunks = text_splitter.split_documents(documents)
+    embeddings = OpenAIEmbeddings()
+    vector_store = Chroma.from_documents(document_chunks, embeddings)
+    return vector_store
+
+
 
 ## Looks at VectorDB and finds relevant information based on user question and chat history. Change prompting here, look into if it's user or human. 
 def get_context_retriever_chain(vector_store):
@@ -52,19 +70,20 @@ def get_context_retriever_chain(vector_store):
     retriever = vector_store.as_retriever() 
     prompt = ChatPromptTemplate.from_messages([
         MessagesPlaceholder(variable_name="chat_history"), #this value is automatically replaced with chat history if it exist and will update as chat_history changes
-        ("user", "{input}"),
+        ("user", "{input}"),     #change user to human? 
         ("user", "Given the above conversation, generate a response to answer this question")    #CHANGE: System prompt can be changed here
     ])
     retriever_chain = create_history_aware_retriever(llm, retriever, prompt)        #REVISIT: Meant to find relevant documents and retrieve it Look into documentation on this 
-
     #DEBUGGING
-    header = '-------------\n get_context_retriever_chain -------------\n'
+    header = '\n-------------CONTEXT RETRIEVER-------------\n'
     chat_history_placeholder = MessagesPlaceholder(variable_name='chat_history')
-    footer = '-------------------------------------------------------------------------'
+    footer = '\n-------------------------------------------------------------------------\n'
+    print(f"{header} MessagesPlaceholder(variable_name=chat_history)= \n{prompt} {footer}")
 
-    print(f"{header} MessagesPlaceholder(variable_name=chat_history)= \n{chat_history_placeholder}\n\n input = {input} \n\n {footer}")
     return retriever_chain 
 
+    
+   
 def get_conversational_rag_chain(retriever_chain):
     llm = ChatOpenAI(temperature=0, model="gpt-4")
     prompt = ChatPromptTemplate.from_messages([
@@ -73,7 +92,7 @@ def get_conversational_rag_chain(retriever_chain):
         ("user", "{input}")
     ])
     stuff_documents_chain = create_stuff_documents_chain(llm, prompt)
-    print(f'-------------\n get_conversational_rag_chain -------------\n Prompt = {prompt}\n\n Stuff_documents_chain = {stuff_documents_chain} \n\n ---------------------------------------------')
+    print(f'\n------------- CONVERSATIONAL RAG -------------\n Prompt = {prompt}\n\n Stuff_documents_chain = {stuff_documents_chain} \n\n ---------------------------------------------')
     return create_retrieval_chain(retriever_chain, stuff_documents_chain)
 
 def get_response(query): 
@@ -93,18 +112,23 @@ def get_response(query):
 with st.sidebar:
     st.header("Settings")
     website_url=st.text_input("Website URL")
-
-if website_url is None or website_url == "": #handles if there is no website url
-    st.info("Please enter a website URL")
+    pdf_docs = st.file_uploader("Upload your PDFs here and click 'Process'", accept_multiple_files=True, type="pdf")
+    print(f"\n pdf docs = {pdf_docs} \n")
+if (website_url is None or website_url == "") and (not pdf_docs): #handles if there is no website url
+    st.info("Please enter a website URL or upload a document")
 else:      
     if "chat_history" not in st.session_state:  # does not change when you re-read application because of session state check
         st.session_state.chat_history = [
             AIMessage(content="Hello, I am a bot. How can I help you?"),
         ]
     if "vector_store" not in st.session_state: 
-        print(f"VECTOR STORE NOT IN SESSION STATE!! \n\n\n session state = {st.session_state} \n\n\n ")
-        st.session_state.vector_store = get_vectorstore_from_url(website_url)
-        print(f"VECTOR STORE should now be in session state \n\n\n session state = {st.session_state} \n\n\n ")
+        if not ((website_url is None or website_url == "")):
+            st.session_state.vector_store = get_vectorstore_from_url(website_url)
+        else: 
+            for uploaded_file in pdf_docs:
+                pdf_path = save_uploadedfile(uploaded_file) 
+            st.session_state.vector_store = get_vectorstore_from_pdf(pdf_path)
+            
 
 
     #handles user inputs 
