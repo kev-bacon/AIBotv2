@@ -1,5 +1,5 @@
 import streamlit as st
-import pypdfium2 as pdfium
+# import pypdfium2 as pdfium
 import os
 import tempfile
 from langchain_core.messages import AIMessage, HumanMessage
@@ -12,7 +12,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.vectorstores import FAISS 
-from langchain_community.document_loaders import PyPDFium2Loader
+# from langchain_community.document_loaders import PyPDFium2Loader
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 load_dotenv() 
 # config settings 
@@ -48,7 +48,7 @@ def get_vectorstore_from_url(url):
     document_chunks = text_splitter.split_documents(document)
     embeddings = OpenAIEmbeddings()
     vector_store = Chroma.from_documents(document_chunks, embeddings)
-    print(f"{color_text('-------------\n URL VectorStore \n-------------\n', Colors.RED)} Document = \n {color_text(document, Colors.BLUE)}\n")
+    # print(f"{color_text('-------------\n URL VectorStore \n-------------\n', Colors.RED)} Document = \n {color_text(document, Colors.BLUE)}\n")
     for i, chunk in enumerate(document_chunks): 
         print(f"chunk[{i}] = {chunk}\n-------------------------------------------------------------------------\n")    
     return vector_store
@@ -61,7 +61,7 @@ def get_vectorstore_from_pdf(pdf_docs):
     document_chunks = text_splitter.split_documents(documents)
     embeddings = OpenAIEmbeddings()
     vector_store = Chroma.from_documents(document_chunks, embeddings)
-    print(f"{color_text('-------------\n PDF VectorStore. \n-------------\n', Colors.RED)} Document = \n {color_text(documents, Colors.BLUE)}\n")
+    # print(f"{color_text('-------------\n PDF VectorStore. \n-------------\n', Colors.RED)} Document = \n {color_text(documents, Colors.BLUE)}\n")
     for i, chunk in enumerate(document_chunks): 
         print(f"chunk[{i}] = {chunk}\n-------------------------------------------------------------------------\n")  
     return vector_store
